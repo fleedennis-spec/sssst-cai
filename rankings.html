@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2026 AP Poll Bump Chart</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #6b6b6b; --grid: #e6e6e6;
+    --line: #c4c4c4; --hi: #cc0000; --hi2: #1f5fbf; --card: #f6f6f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --fg: #ececec; --muted: #9a9a9a; --grid: #262a31;
+      --line: #4a4f58; --hi: #ff4d4d; --hi2: #6ea8ff; --card: #181b21;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 20px 16px 8px; max-width: 1200px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 1.5rem; }
+  .sub { color: var(--muted); margin: 0; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    padding: 12px 16px; max-width: 1200px; margin: 0 auto; }
+  select { font: inherit; padding: 6px 10px; border-radius: 8px;
+    background: var(--card); color: var(--fg); border: 1px solid var(--grid); }
+  label { color: var(--muted); }
+  .wrap { overflow-x: auto; padding: 0 16px 24px; max-width: 1200px; margin: 0 auto; }
+  svg { display: block; }
+  .grid line { stroke: var(--grid); }
+  .axis text { fill: var(--muted); font-size: 12px; }
+  .team path { fill: none; stroke: var(--line); stroke-width: 2; stroke-opacity: .55;
+    transition: stroke .15s, stroke-opacity .15s, stroke-width .15s; }
+  .team circle { fill: var(--line); opacity: .55; }
+  .team text { fill: var(--muted); font-size: 11px; opacity: .8; }
+  .team { cursor: pointer; }
+  .team.on path { stroke: var(--hi); stroke-opacity: 1; stroke-width: 4; }
+  .team.on circle { fill: var(--hi); opacity: 1; }
+  .team.on text { fill: var(--fg); font-weight: 700; opacity: 1; }
+  .team.on2 path { stroke: var(--hi2); stroke-opacity: 1; stroke-width: 4; }
+  .team.on2 circle { fill: var(--hi2); opacity: 1; }
+  .team.on2 text { fill: var(--fg); font-weight: 700; opacity: 1; }
+  .dim .team:not(.on):not(.on2) { opacity: .35; }
+  .msg { padding: 24px 16px; color: var(--muted); max-width: 1200px; margin: 0 auto; }
+  footer { color: var(--muted); font-size: 12px; padding: 0 16px 24px; max-width: 1200px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>2026 AP Top 25, week by week</h1>
+  <p class="sub">Each line is a team. Gaps mean the team fell out of the poll. Tap a line to highlight it.</p>
+</header>
+<div class="controls">
+  <label for="t1">Highlight</label>
+  <select id="t1"></select>
+  <label for="t2">Compare</label>
+  <select id="t2"></select>
+</div>
+<div class="wrap"><div id="chart"></div></div>
+<p class="msg" id="msg" hidden></p>
+<footer>Data: CollegeFootballData.com. Updated weekly.</footer>
+
+<script>
+(async function () {
+  const DATA_URL = "data/rankings-2026.json";
+  const DEFAULT_TEAM = "Texas Tech";
+  const msg = document.getElementById("msg");
+  const showMsg = t => { msg.textContent = t; msg.hidden = false; };
+
+  let raw;
+  try {
+    const r = await fetch(DATA_URL, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    raw = await r.json();
+  } catch (e) {
+    showMsg("Couldn't load the rankings data yet. Run the \"Update AP rankings\" workflow, then reload.");
+    return;
+  }
+
+  // Build an ordered list of AP poll weeks: regular season first, then postseason.
+  const weeks = [];
+  for (const wk of raw || []) {
+    const poll = (wk.polls || []).find(p => /^AP/i.test(p.poll || ""));
+    if (!poll || !poll.ranks || !poll.ranks.length) continue;
+    const post = String(wk.seasonType || "").toLowerCase() === "postseason";
+    weeks.push({
+      label: post ? "Final" : (wk.week === 1 ? "Pre" : "Wk " + wk.week),
+      order: (post ? 100 : 0) + (wk.week || 0),
+      ranks: poll.ranks
+    });
+  }
+  weeks.sort((a, b) => a.order - b.order);
+  if (!weeks.length) { showMsg("No AP poll weeks in the data yet."); return; }
+
+  // team -> array of rank per week (null when unranked)
+  const teams = new Map();
+  weeks.forEach((w, i) => {
+    for (const r of w.ranks) {
+      const name = r.school;
+      if (!name || r.rank == null) continue;
+      if (!teams.has(name)) teams.set(name, new Array(weeks.length).fill(null));
+      teams.get(name)[i] = r.rank;
+    }
+  });
+
+  // Layout
+  const N = weeks.length, MAXR = 25;
+  const colW = 64, rowH = 24;
+  const m = { top: 28, right: 130, bottom: 12, left: 36 };
+  const W = m.left + m.right + Math.max(1, N - 1) * colW;
+  const H = m.top + m.bottom + (MAXR - 1) * rowH;
+  const x = i => m.left + i * colW;
+  const y = r => m.top + (r - 1) * rowH;
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs, parent) => {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  };
+
+  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": "Bump chart of 2026 AP Top 25 rankings by week" });
+  const grid = el("g", { class: "grid" }, svg);
+  const axis = el("g", { class: "axis" }, svg);
+  for (let r = 1; r <= MAXR; r++) {
+    el("line", { x1: m.left, x2: x(N - 1), y1: y(r), y2: y(r) }, grid);
+    const t = el("text", { x: m.left - 10, y: y(r) + 4, "text-anchor": "end" }, axis);
+    t.textContent = r;
+  }
+  weeks.forEach((w, i) => {
+    const t = el("text", { x: x(i), y: m.top - 12, "text-anchor": "middle" }, axis);
+    t.textContent = w.label;
+  });
+
+  const plot = el("g", {}, svg);
+  const groups = new Map();
+  // Draw teams in reverse current rank so higher-ranked teams sit on top.
+  const lastRank = arr => { for (let i = arr.length - 1; i >= 0; i--) if (arr[i] != null) return [i, arr[i]]; return [0, 99]; };
+  const names = [...teams.keys()].sort((a, b) => lastRank(teams.get(b))[1] - lastRank(teams.get(a))[1]);
+
+  for (const name of names) {
+    const ranks = teams.get(name);
+    const g = el("g", { class: "team" }, plot);
+    // Path with gaps where the team was unranked
+    let d = "", pen = false;
+    ranks.forEach((r, i) => {
+      if (r == null) { pen = false; return; }
+      d += (pen ? "L" : "M") + x(i) + " " + y(r) + " ";
+      pen = true;
+    });
+    el("path", { d }, g);
+    ranks.forEach((r, i) => { if (r != null) el("circle", { cx: x(i), cy: y(r), r: 3.5 }, g); });
+    const [li, lr] = lastRank(ranks);
+    const label = el("text", { x: x(li) + 8, y: y(lr) + 4 }, g);
+    label.textContent = name;
+    const title = el("title", {}, g);
+    title.textContent = name + ": " + ranks.map((r, i) => weeks[i].label + " " + (r ?? "NR")).join(", ");
+    g.addEventListener("click", () => { sel1.value = name; apply(); });
+    groups.set(name, g);
+  }
+  document.getElementById("chart").appendChild(svg);
+
+  // Controls
+  const sel1 = document.getElementById("t1"), sel2 = document.getElementById("t2");
+  const alpha = [...teams.keys()].sort();
+  for (const s of [sel1, sel2]) {
+    const none = document.createElement("option");
+    none.value = ""; none.textContent = "None";
+    s.appendChild(none);
+    for (const n of alpha) {
+      const o = document.createElement("option");
+      o.value = n; o.textContent = n; s.appendChild(o);
+    }
+  }
+  sel1.value = teams.has(DEFAULT_TEAM) ? DEFAULT_TEAM : "";
+
+  function apply() {
+    for (const [n, g] of groups) {
+      g.classList.toggle("on", n === sel1.value);
+      g.classList.toggle("on2", n === sel2.value && n !== sel1.value);
+    }
+    svg.classList.toggle("dim", !!(sel1.value || sel2.value));
+    // Raise highlighted lines to the top
+    for (const v of [sel2.value, sel1.value]) if (v && groups.has(v)) plot.appendChild(groups.get(v));
+  }
+  sel1.addEventListener("change", apply);
+  sel2.addEventListener("change", apply);
+  apply();
+})();
+</script>
+</body>
+</html>
