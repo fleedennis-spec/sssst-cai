@@ -1,0 +1,23 @@
+name: CFBD API test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call CFBD API
+        env:
+          CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
+        run: |
+          if [ -z "$CFBD_API_KEY" ]; then echo "Secret CFBD_API_KEY not found"; exit 1; fi
+          status=$(curl -sS -o games.json -w "%{http_code}" --get \
+            "https://api.collegefootballdata.com/games" \
+            --data-urlencode "year=2023" \
+            --data-urlencode "team=Texas Tech" \
+            -H "Authorization: Bearer $CFBD_API_KEY")
+          echo "HTTP status: $status"
+          if [ "$status" != "200" ]; then cat games.json; exit 1; fi
+          echo "Games returned: $(jq length games.json)"
+          jq -r '.[] | "Wk \(.week): \(.awayTeam) \(.awayPoints) @ \(.homeTeam) \(.homePoints)"' games.json
