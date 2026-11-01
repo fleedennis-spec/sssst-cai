@@ -18,7 +18,7 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg);
     font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  header, .controls, .wrap, footer, .msg { max-width: 1200px; margin: 0 auto; }
+  header, .controls, .wrap, footer, .msg { max-width: 1632px; margin: 0 auto; }
   header { padding: 20px 16px 4px; }
   h1 { margin: 0 0 4px; font-size: 1.5rem; }
   .sub { color: var(--muted); margin: 0; }
@@ -47,7 +47,7 @@
   .team.off text { fill: var(--muted) !important; font-weight: 400; opacity: .55; }
   .team.hot path { stroke-width: 4.5; }
   .team.hot text { font-size: 12px; font-weight: 700; }
-  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 0 16px 8px; max-width: 1200px;
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 0 16px 8px; max-width: 1632px;
     margin: 0 auto; font-size: 13px; }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   .legend i { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
@@ -157,14 +157,10 @@
   };
   for (const [name, t] of teams) t.color = colorFor(name);
 
-  // ---- Layout
+  // ---- Layout helpers (sizes are set in draw() from the available width)
   const N = weeks.length, MAXR = 25;
-  const colW = 64, rowH = 24;
   const m = { top: 28, right: 130, bottom: 12, left: 36 };
-  const W = m.left + m.right + Math.max(1, N - 1) * colW;
-  const H = m.top + m.bottom + (MAXR - 1) * rowH;
-  const x = i => m.left + i * colW;
-  const y = r => m.top + (r - 1) * rowH;
+  let W, H, x, y;
   const NS = "http://www.w3.org/2000/svg";
   const el = (tag, attrs, parent) => {
     const e = document.createElementNS(NS, tag);
@@ -173,7 +169,23 @@
     return e;
   };
 
-  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img",
+  const lastRank = arr => { for (let i = arr.length - 1; i >= 0; i--) if (arr[i] != null) return [i, arr[i]]; return [0, 99]; };
+  // Lower-ranked teams drawn first so higher-ranked teams sit on top
+  const order = [...teams.keys()].sort((a, b) => lastRank(teams.get(b).ranks)[1] - lastRank(teams.get(a).ranks)[1]);
+  const chartBox = document.getElementById("chart");
+  let svg, plot, groups = new Map();
+
+  function draw() {
+  // Fill the available width; keep roughly 16:9, never squashing rows or columns too small
+  const avail = Math.max(320, chartBox.clientWidth);
+  W = Math.max(avail, m.left + m.right + Math.max(1, N - 1) * 48);
+  H = Math.max(m.top + m.bottom + (MAXR - 1) * 22, Math.round(W * 9 / 16));
+  const colW = (W - m.left - m.right) / Math.max(1, N - 1);
+  const rowH = (H - m.top - m.bottom) / (MAXR - 1);
+  x = i => m.left + i * colW;
+  y = r => m.top + (r - 1) * rowH;
+
+  svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img",
     "aria-label": "Bump chart of 2026 AP Top 25 rankings by week" });
   const grid = el("g", { class: "grid" }, svg);
   const axis = el("g", { class: "axis" }, svg);
@@ -183,11 +195,8 @@
   }
   weeks.forEach((w, i) => { el("text", { x: x(i), y: m.top - 12, "text-anchor": "middle" }, axis).textContent = w.label; });
 
-  const plot = el("g", {}, svg);
-  const groups = new Map();
-  const lastRank = arr => { for (let i = arr.length - 1; i >= 0; i--) if (arr[i] != null) return [i, arr[i]]; return [0, 99]; };
-  // Lower-ranked teams drawn first so higher-ranked teams sit on top
-  const order = [...teams.keys()].sort((a, b) => lastRank(teams.get(b).ranks)[1] - lastRank(teams.get(a).ranks)[1]);
+  plot = el("g", {}, svg);
+  groups = new Map();
 
   for (const name of order) {
     const t = teams.get(name);
@@ -212,7 +221,8 @@
     });
     groups.set(name, g);
   }
-  document.getElementById("chart").appendChild(svg);
+  chartBox.replaceChildren(svg);
+  }
 
   // ---- Controls
   const opt = (s, v, label) => { const o = document.createElement("option"); o.value = v; o.textContent = label; s.appendChild(o); };
@@ -271,7 +281,17 @@
 
   buttons.forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
   [confSel, sel1, sel2].forEach(s => s.addEventListener("change", apply));
+  draw();
   setMode("all");
+  let lastW = chartBox.clientWidth, t;
+  window.addEventListener("resize", () => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      if (chartBox.clientWidth === lastW) return;
+      lastW = chartBox.clientWidth;
+      draw(); apply();
+    }, 150);
+  });
 })();
 </script>
 </body>
