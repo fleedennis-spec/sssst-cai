@@ -7,78 +7,98 @@
 <style>
   :root {
     --bg: #ffffff; --fg: #1a1a1a; --muted: #6b6b6b; --grid: #e6e6e6;
-    --line: #c4c4c4; --hi: #cc0000; --hi2: #1f5fbf; --card: #f6f6f6;
+    --off: #cfcfcf; --card: #f4f4f4; --accent: #1a1a1a;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #0f1115; --fg: #ececec; --muted: #9a9a9a; --grid: #262a31;
-      --line: #4a4f58; --hi: #ff4d4d; --hi2: #6ea8ff; --card: #181b21;
+      --off: #3a3f48; --card: #1a1d23; --accent: #ececec;
     }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg);
     font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  header { padding: 20px 16px 8px; max-width: 1200px; margin: 0 auto; }
+  header, .controls, .wrap, footer, .msg { max-width: 1200px; margin: 0 auto; }
+  header { padding: 20px 16px 4px; }
   h1 { margin: 0 0 4px; font-size: 1.5rem; }
   .sub { color: var(--muted); margin: 0; }
-  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
-    padding: 12px 16px; max-width: 1200px; margin: 0 auto; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 14px 16px; }
+  .seg { display: inline-flex; background: var(--card); border-radius: 10px; padding: 3px; }
+  .seg button { font: inherit; border: 0; background: transparent; color: var(--muted);
+    padding: 6px 14px; border-radius: 8px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--bg); color: var(--fg); font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+  .opt { display: none; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .opt.show { display: inline-flex; }
   select { font: inherit; padding: 6px 10px; border-radius: 8px;
     background: var(--card); color: var(--fg); border: 1px solid var(--grid); }
   label { color: var(--muted); }
-  .wrap { overflow-x: auto; padding: 0 16px 24px; max-width: 1200px; margin: 0 auto; }
+  .wrap { overflow-x: auto; padding: 0 16px 16px; }
   svg { display: block; }
   .grid line { stroke: var(--grid); }
   .axis text { fill: var(--muted); font-size: 12px; }
-  .team path { fill: none; stroke: var(--line); stroke-width: 2; stroke-opacity: .55;
-    transition: stroke .15s, stroke-opacity .15s, stroke-width .15s; }
-  .team circle { fill: var(--line); opacity: .55; }
-  .team text { fill: var(--muted); font-size: 11px; opacity: .8; }
   .team { cursor: pointer; }
-  .team.on path { stroke: var(--hi); stroke-opacity: 1; stroke-width: 4; }
-  .team.on circle { fill: var(--hi); opacity: 1; }
-  .team.on text { fill: var(--fg); font-weight: 700; opacity: 1; }
-  .team.on2 path { stroke: var(--hi2); stroke-opacity: 1; stroke-width: 4; }
-  .team.on2 circle { fill: var(--hi2); opacity: 1; }
-  .team.on2 text { fill: var(--fg); font-weight: 700; opacity: 1; }
-  .dim .team:not(.on):not(.on2) { opacity: .35; }
-  .msg { padding: 24px 16px; color: var(--muted); max-width: 1200px; margin: 0 auto; }
-  footer { color: var(--muted); font-size: 12px; padding: 0 16px 24px; max-width: 1200px; margin: 0 auto; }
+  .team path { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round;
+    transition: stroke-opacity .15s, stroke-width .15s; }
+  .team circle { transition: opacity .15s; }
+  .team text { font-size: 11px; font-weight: 600; }
+  .team.off path { stroke: var(--off) !important; stroke-opacity: .6; stroke-width: 2; }
+  .team.off circle { fill: var(--off) !important; }
+  .team.off text { fill: var(--muted) !important; font-weight: 400; opacity: .55; }
+  .team.hot path { stroke-width: 4.5; }
+  .team.hot text { font-size: 12px; font-weight: 700; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 0 16px 8px; max-width: 1200px;
+    margin: 0 auto; font-size: 13px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
+  .msg { padding: 24px 16px; color: var(--muted); }
+  footer { color: var(--muted); font-size: 12px; padding: 0 16px 24px; }
 </style>
 </head>
 <body>
 <header>
   <h1>2026 AP Top 25, week by week</h1>
-  <p class="sub">Each line is a team. Gaps mean the team fell out of the poll. Tap a line to highlight it.</p>
+  <p class="sub">Each line is a team in its colors. Gaps mean it fell out of the poll. Tap a line to compare it.</p>
 </header>
+
 <div class="controls">
-  <label for="t1">Highlight</label>
-  <select id="t1"></select>
-  <label for="t2">Compare</label>
-  <select id="t2"></select>
+  <div class="seg" role="group" aria-label="View">
+    <button data-mode="all" aria-pressed="true">All teams</button>
+    <button data-mode="conf" aria-pressed="false">Conference</button>
+    <button data-mode="compare" aria-pressed="false">Compare</button>
+  </div>
+  <div class="opt" id="opt-conf">
+    <label for="conf">Conference</label>
+    <select id="conf"></select>
+  </div>
+  <div class="opt" id="opt-compare">
+    <select id="t1" aria-label="First team"></select>
+    <label>vs</label>
+    <select id="t2" aria-label="Second team"></select>
+  </div>
 </div>
+<div class="legend" id="legend"></div>
 <div class="wrap"><div id="chart"></div></div>
 <p class="msg" id="msg" hidden></p>
 <footer>Data: CollegeFootballData.com. Updated weekly.</footer>
 
 <script>
 (async function () {
-  const DATA_URL = "data/rankings-2026.json";
   const DEFAULT_TEAM = "Texas Tech";
   const msg = document.getElementById("msg");
   const showMsg = t => { msg.textContent = t; msg.hidden = false; };
+  const getJSON = async url => {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) throw new Error(url + " " + r.status);
+    return r.json();
+  };
 
-  let raw;
-  try {
-    const r = await fetch(DATA_URL, { cache: "no-store" });
-    if (!r.ok) throw new Error(r.status);
-    raw = await r.json();
-  } catch (e) {
-    showMsg("Couldn't load the rankings data yet. Run the \"Update AP rankings\" workflow, then reload.");
-    return;
-  }
+  let raw, teamInfo = [];
+  try { raw = await getJSON("data/rankings-2026.json"); }
+  catch (e) { showMsg("Couldn't load the rankings data yet. Run the \"Update AP rankings\" workflow, then reload."); return; }
+  try { teamInfo = await getJSON("data/teams-2026.json"); } catch (e) { /* colors fall back to a palette */ }
 
-  // Build an ordered list of AP poll weeks: regular season first, then postseason.
+  // ---- Weeks (AP poll only), in order: regular season, then postseason
   const weeks = [];
   for (const wk of raw || []) {
     const poll = (wk.polls || []).find(p => /^AP/i.test(p.poll || ""));
@@ -93,18 +113,51 @@
   weeks.sort((a, b) => a.order - b.order);
   if (!weeks.length) { showMsg("No AP poll weeks in the data yet."); return; }
 
-  // team -> array of rank per week (null when unranked)
+  // ---- Teams: rank per week + conference
   const teams = new Map();
   weeks.forEach((w, i) => {
     for (const r of w.ranks) {
-      const name = r.school;
-      if (!name || r.rank == null) continue;
-      if (!teams.has(name)) teams.set(name, new Array(weeks.length).fill(null));
-      teams.get(name)[i] = r.rank;
+      if (!r.school || r.rank == null) continue;
+      if (!teams.has(r.school)) teams.set(r.school, { ranks: new Array(weeks.length).fill(null), conf: r.conference || "" });
+      const t = teams.get(r.school);
+      t.ranks[i] = r.rank;
+      if (r.conference) t.conf = r.conference;
     }
   });
 
-  // Layout
+  // ---- Colors: team's primary color, or alternate if it disappears against the background
+  const info = new Map(teamInfo.map(t => [t.school, t]));
+  const dark = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
+  const BG = dark ? "#0f1115" : "#ffffff";
+  const hex = c => {
+    if (!c) return null;
+    c = String(c).trim().replace(/^#?/, "#");
+    return /^#[0-9a-f]{6}$/i.test(c) ? c : (/^#[0-9a-f]{3}$/i.test(c) ? "#" + c.slice(1).split("").map(x => x + x).join("") : null);
+  };
+  const lum = c => {
+    const v = [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16) / 255)
+      .map(x => x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4));
+    return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+  };
+  const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  const mix = (c, toward, amt) => "#" + [1, 3, 5].map(i => {
+    const a = parseInt(c.slice(i, i + 2), 16), b = parseInt(toward.slice(i, i + 2), 16);
+    return Math.round(a + (b - a) * amt).toString(16).padStart(2, "0");
+  }).join("");
+  const FALLBACK = ["#e6194b", "#3cb44b", "#4363d8", "#f58231", "#911eb4", "#42d4f4", "#f032e6", "#9a6324", "#469990", "#800000"];
+  let fb = 0;
+  const colorFor = name => {
+    const t = info.get(name) || {};
+    for (const c of [hex(t.color), hex(t.alternateColor)]) if (c && contrast(c, BG) >= 2.2) return c;
+    const base = hex(t.color) || FALLBACK[fb++ % FALLBACK.length];
+    // Lighten (dark mode) or darken (light mode) until readable
+    let c = base;
+    for (let k = 1; k <= 6 && contrast(c, BG) < 2.2; k++) c = mix(base, dark ? "#ffffff" : "#000000", k * 0.12);
+    return c;
+  };
+  for (const [name, t] of teams) t.color = colorFor(name);
+
+  // ---- Layout
   const N = weeks.length, MAXR = 25;
   const colW = 64, rowH = 24;
   const m = { top: 28, right: 130, bottom: 12, left: 36 };
@@ -126,68 +179,99 @@
   const axis = el("g", { class: "axis" }, svg);
   for (let r = 1; r <= MAXR; r++) {
     el("line", { x1: m.left, x2: x(N - 1), y1: y(r), y2: y(r) }, grid);
-    const t = el("text", { x: m.left - 10, y: y(r) + 4, "text-anchor": "end" }, axis);
-    t.textContent = r;
+    el("text", { x: m.left - 10, y: y(r) + 4, "text-anchor": "end" }, axis).textContent = r;
   }
-  weeks.forEach((w, i) => {
-    const t = el("text", { x: x(i), y: m.top - 12, "text-anchor": "middle" }, axis);
-    t.textContent = w.label;
-  });
+  weeks.forEach((w, i) => { el("text", { x: x(i), y: m.top - 12, "text-anchor": "middle" }, axis).textContent = w.label; });
 
   const plot = el("g", {}, svg);
   const groups = new Map();
-  // Draw teams in reverse current rank so higher-ranked teams sit on top.
   const lastRank = arr => { for (let i = arr.length - 1; i >= 0; i--) if (arr[i] != null) return [i, arr[i]]; return [0, 99]; };
-  const names = [...teams.keys()].sort((a, b) => lastRank(teams.get(b))[1] - lastRank(teams.get(a))[1]);
+  // Lower-ranked teams drawn first so higher-ranked teams sit on top
+  const order = [...teams.keys()].sort((a, b) => lastRank(teams.get(b).ranks)[1] - lastRank(teams.get(a).ranks)[1]);
 
-  for (const name of names) {
-    const ranks = teams.get(name);
+  for (const name of order) {
+    const t = teams.get(name);
     const g = el("g", { class: "team" }, plot);
-    // Path with gaps where the team was unranked
     let d = "", pen = false;
-    ranks.forEach((r, i) => {
+    t.ranks.forEach((r, i) => {
       if (r == null) { pen = false; return; }
       d += (pen ? "L" : "M") + x(i) + " " + y(r) + " ";
       pen = true;
     });
-    el("path", { d }, g);
-    ranks.forEach((r, i) => { if (r != null) el("circle", { cx: x(i), cy: y(r), r: 3.5 }, g); });
-    const [li, lr] = lastRank(ranks);
-    const label = el("text", { x: x(li) + 8, y: y(lr) + 4 }, g);
-    label.textContent = name;
-    const title = el("title", {}, g);
-    title.textContent = name + ": " + ranks.map((r, i) => weeks[i].label + " " + (r ?? "NR")).join(", ");
-    g.addEventListener("click", () => { sel1.value = name; apply(); });
+    el("path", { d, stroke: t.color }, g);
+    t.ranks.forEach((r, i) => { if (r != null) el("circle", { cx: x(i), cy: y(r), r: 3.5, fill: t.color }, g); });
+    const [li, lr] = lastRank(t.ranks);
+    el("text", { x: x(li) + 8, y: y(lr) + 4, fill: t.color }, g).textContent = name;
+    el("title", {}, g).textContent = name + (t.conf ? " (" + t.conf + ")" : "") + ": " +
+      t.ranks.map((r, i) => weeks[i].label + " " + (r ?? "NR")).join(", ");
+    g.addEventListener("click", () => {
+      if (state.mode !== "compare") { sel2.value = sel1.value !== name ? sel1.value : ""; }
+      else if (sel1.value && sel1.value !== name) { sel2.value = sel1.value; }
+      sel1.value = name;
+      setMode("compare");
+    });
     groups.set(name, g);
   }
   document.getElementById("chart").appendChild(svg);
 
-  // Controls
+  // ---- Controls
+  const opt = (s, v, label) => { const o = document.createElement("option"); o.value = v; o.textContent = label; s.appendChild(o); };
+  const confSel = document.getElementById("conf");
+  const confs = [...new Set([...teams.values()].map(t => t.conf).filter(Boolean))].sort();
+  confs.forEach(c => opt(confSel, c, c));
+  const myConf = (teams.get(DEFAULT_TEAM) || {}).conf;
+  if (myConf) confSel.value = myConf;
+
   const sel1 = document.getElementById("t1"), sel2 = document.getElementById("t2");
   const alpha = [...teams.keys()].sort();
-  for (const s of [sel1, sel2]) {
-    const none = document.createElement("option");
-    none.value = ""; none.textContent = "None";
-    s.appendChild(none);
-    for (const n of alpha) {
-      const o = document.createElement("option");
-      o.value = n; o.textContent = n; s.appendChild(o);
-    }
-  }
+  for (const s of [sel1, sel2]) { opt(s, "", "None"); alpha.forEach(n => opt(s, n, n)); }
   sel1.value = teams.has(DEFAULT_TEAM) ? DEFAULT_TEAM : "";
 
-  function apply() {
-    for (const [n, g] of groups) {
-      g.classList.toggle("on", n === sel1.value);
-      g.classList.toggle("on2", n === sel2.value && n !== sel1.value);
-    }
-    svg.classList.toggle("dim", !!(sel1.value || sel2.value));
-    // Raise highlighted lines to the top
-    for (const v of [sel2.value, sel1.value]) if (v && groups.has(v)) plot.appendChild(groups.get(v));
+  const legend = document.getElementById("legend");
+  const state = { mode: "all" };
+  const buttons = [...document.querySelectorAll(".seg button")];
+
+  function setMode(mode) {
+    state.mode = mode;
+    buttons.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
+    document.getElementById("opt-conf").classList.toggle("show", mode === "conf");
+    document.getElementById("opt-compare").classList.toggle("show", mode === "compare");
+    apply();
   }
-  sel1.addEventListener("change", apply);
-  sel2.addEventListener("change", apply);
-  apply();
+
+  function apply() {
+    let on;
+    if (state.mode === "all") on = () => true;
+    else if (state.mode === "conf") on = n => teams.get(n).conf === confSel.value;
+    else on = n => n === sel1.value || n === sel2.value;
+    const lit = [];
+    for (const [n, g] of groups) {
+      const isOn = on(n);
+      g.classList.toggle("off", !isOn);
+      g.classList.toggle("hot", isOn && state.mode !== "all");
+      if (isOn) lit.push(n);
+    }
+    // Bring lit lines to the front, keeping higher-ranked on top
+    for (const n of order) plot.appendChild(groups.get(n));
+    if (state.mode !== "all") {
+      for (const n of order) if (lit.includes(n)) plot.appendChild(groups.get(n));
+    }
+
+    legend.innerHTML = "";
+    if (state.mode !== "all") {
+      lit.sort().forEach(n => {
+        const s = document.createElement("span");
+        const i = document.createElement("i"); i.style.background = teams.get(n).color;
+        s.append(i, document.createTextNode(n));
+        legend.appendChild(s);
+      });
+      if (!lit.length) legend.textContent = state.mode === "conf" ? "No ranked teams from this conference." : "Pick a team.";
+    }
+  }
+
+  buttons.forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
+  [confSel, sel1, sel2].forEach(s => s.addEventListener("change", apply));
+  setMode("all");
 })();
 </script>
 </body>
