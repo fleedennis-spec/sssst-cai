@@ -44,6 +44,11 @@
   .team text { font-size: 11px; font-weight: 600; }
   .team.off path { stroke: var(--off) !important; stroke-opacity: .6; stroke-width: 2; }
   .team.off circle { fill: var(--off) !important; }
+  .team .stamp circle { fill: var(--bg) !important; stroke-width: 1.5; opacity: 1; }
+  .team .stamp text { font-size: 8.5px; font-weight: 800; opacity: 1; }
+  .team.off .stamp circle { stroke: var(--off) !important; }
+  .team.off .stamp text { fill: var(--off) !important; font-size: 8.5px; font-weight: 800; }
+  .team.hot .stamp text { font-size: 8.5px; }
   .team.off text { fill: var(--muted) !important; font-weight: 400; opacity: .55; }
   .team.hot path { stroke-width: 4.5; }
   .team.hot text { font-size: 12px; font-weight: 700; }
@@ -97,6 +102,8 @@
   try { raw = await getJSON("data/rankings-2026.json"); }
   catch (e) { showMsg("Couldn't load the rankings data yet. Run the \"Update AP rankings\" workflow, then reload."); return; }
   try { teamInfo = await getJSON("data/teams-2026.json"); } catch (e) { /* colors fall back to a palette */ }
+  let losses = [];
+  try { losses = await getJSON("data/losses-2026.json"); } catch (e) { /* no loss stamps */ }
 
   // ---- Weeks (AP poll only), in order: regular season, then postseason
   const weeks = [];
@@ -107,6 +114,7 @@
     weeks.push({
       label: post ? "Final" : (wk.week === 1 ? "Pre" : "Wk " + wk.week),
       order: (post ? 100 : 0) + (wk.week || 0),
+      week: wk.week, post,
       ranks: poll.ranks
     });
   }
@@ -124,6 +132,26 @@
       if (r.conference) t.conf = r.conference;
     }
   });
+
+  // ---- Losses -> poll columns. The poll labeled week N comes out before week N's games,
+  // so a loss in game week K first shows up in the week K+1 poll. Postseason losses go on "Final".
+  const regIdx = new Map(), postIdx = weeks.findIndex(w => w.post);
+  weeks.forEach((w, i) => { if (!w.post) regIdx.set(w.week, i); });
+  for (const t of teams.values()) t.losses = [];
+  for (const L of losses) {
+    const t = teams.get(L.team);
+    if (!t) continue;
+    let i;
+    if (String(L.seasonType).toLowerCase() === "postseason") i = postIdx >= 0 ? postIdx : -1;
+    else i = regIdx.has(L.week + 1) ? regIdx.get(L.week + 1) : -1;
+    if (i < 0) continue; // the poll after this loss isn't out yet
+    // If the team fell out of that poll, stamp the last ranked point before it (where the line ends)
+    // (losses while already unranked aren't stamped, since there's no line there)
+    if (t.ranks[i] == null) {
+      if (i > 0 && t.ranks[i - 1] != null) i = i - 1; else continue;
+    }
+    t.losses.push({ i, text: `L ${L.home ? "vs" : "at"} ${L.opp} ${L.pf}–${L.pa}` });
+  }
 
   // ---- Colors: team's primary color, or alternate if it disappears against the background
   const info = new Map(teamInfo.map(t => [t.school, t]));
@@ -178,7 +206,7 @@
   function draw() {
   // Fixed width per week, so the chart grows sideways as the season goes on.
   // Height follows 16:9 of the width, but rows never get shorter than 24px.
-  const COL_W = 80;
+  const COL_W = 75;
   W = m.left + m.right + Math.max(1, N - 1) * COL_W;
   H = Math.max(m.top + m.bottom + (MAXR - 1) * 24, Math.round(W * 9 / 16));
   const colW = COL_W;
@@ -210,6 +238,16 @@
     });
     el("path", { d, stroke: t.color }, g);
     t.ranks.forEach((r, i) => { if (r != null) el("circle", { cx: x(i), cy: y(r), r: 3.5, fill: t.color }, g); });
+    // Loss stamps: a small circled "L" up and to the right of the point, like a ® mark
+    const perCol = {};
+    for (const L of t.losses) {
+      const k = perCol[L.i] = (perCol[L.i] || 0) + 1;
+      const sx = x(L.i) + 9 + (k - 1) * 13, sy = y(t.ranks[L.i]) - 9;
+      const s = el("g", { class: "stamp" }, g);
+      el("circle", { cx: sx, cy: sy, r: 6, stroke: t.color, "data-c": t.color }, s);
+      el("text", { x: sx, y: sy + 3.2, "text-anchor": "middle", fill: t.color }, s).textContent = "L";
+      el("title", {}, s).textContent = name + ": " + L.text;
+    }
     const [li, lr] = lastRank(t.ranks);
     el("text", { x: x(li) + 8, y: y(lr) + 4, fill: t.color }, g).textContent = name;
     el("title", {}, g).textContent = name + (t.conf ? " (" + t.conf + ")" : "") + ": " +

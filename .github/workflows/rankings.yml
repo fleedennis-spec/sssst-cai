@@ -32,12 +32,27 @@ jobs:
             -H "Authorization: Bearer $CFBD_API_KEY" -o teams.json
           jq '[.[] | {school, conference, color, alternateColor}]' teams.json > data/teams-2026.json
           echo "Teams saved: $(jq length data/teams-2026.json)"
+          for type in regular postseason; do
+            curl -sS --fail-with-body --get "https://api.collegefootballdata.com/games" \
+              --data-urlencode "year=2026" \
+              --data-urlencode "seasonType=$type" \
+              -H "Authorization: Bearer $CFBD_API_KEY" -o "games-$type.json"
+          done
+          # Keep only losses from completed games: who lost, to whom, the score, and when
+          jq -s 'add | [ .[]
+            | select(.homePoints != null and .awayPoints != null and .homePoints != .awayPoints)
+            | if .homePoints < .awayPoints
+              then {team: .homeTeam, opp: .awayTeam, pf: .homePoints, pa: .awayPoints, home: true}
+              else {team: .awayTeam, opp: .homeTeam, pf: .awayPoints, pa: .homePoints, home: false} end
+              + {week: .week, seasonType: .seasonType} ]' \
+            games-regular.json games-postseason.json > data/losses-2026.json
+          echo "Losses saved: $(jq length data/losses-2026.json)"
       - name: Commit if changed
         id: commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/rankings-2026.json data/teams-2026.json
+          git add data/rankings-2026.json data/teams-2026.json data/losses-2026.json
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
