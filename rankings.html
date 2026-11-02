@@ -45,10 +45,10 @@
   .team.off path { stroke: var(--off) !important; stroke-opacity: .6; stroke-width: 2; }
   .team.off circle { fill: var(--off) !important; }
   .team .stamp circle { fill: var(--bg) !important; stroke-width: 1.5; opacity: 1; }
-  .team .stamp text { font-size: 8.5px; font-weight: 800; opacity: 1; }
+  .team .stamp text { font-size: 9.5px; font-weight: 800; opacity: 1; }
   .team.off .stamp circle { stroke: var(--off) !important; }
-  .team.off .stamp text { fill: var(--off) !important; font-size: 8.5px; font-weight: 800; }
-  .team.hot .stamp text { font-size: 8.5px; }
+  .team.off .stamp text { fill: var(--off) !important; font-size: 9.5px; font-weight: 800; }
+  .team.hot .stamp text { font-size: 9.5px; }
   .team.off text { fill: var(--muted) !important; font-weight: 400; opacity: .55; }
   .team.hot path { stroke-width: 4.5; }
   .team.hot text { font-size: 12px; font-weight: 700; }
@@ -238,14 +238,14 @@
     });
     el("path", { d, stroke: t.color }, g);
     t.ranks.forEach((r, i) => { if (r != null) el("circle", { cx: x(i), cy: y(r), r: 3.5, fill: t.color }, g); });
-    // Loss stamps: a small circled "L" up and to the right of the point, like a ® mark
+    // Loss stamps: a circled "L" placed on top of that week's point, like a ® mark
     const perCol = {};
     for (const L of t.losses) {
       const k = perCol[L.i] = (perCol[L.i] || 0) + 1;
-      const sx = x(L.i) + 9 + (k - 1) * 13, sy = y(t.ranks[L.i]) - 9;
+      const sx = x(L.i) + (k - 1) * 15, sy = y(t.ranks[L.i]);
       const s = el("g", { class: "stamp" }, g);
-      el("circle", { cx: sx, cy: sy, r: 6, stroke: t.color, "data-c": t.color }, s);
-      el("text", { x: sx, y: sy + 3.2, "text-anchor": "middle", fill: t.color }, s).textContent = "L";
+      el("circle", { cx: sx, cy: sy, r: 7, stroke: t.color, "data-c": t.color }, s);
+      el("text", { x: sx, y: sy + 3.4, "text-anchor": "middle", fill: t.color }, s).textContent = "L";
       el("title", {}, s).textContent = name + ": " + L.text;
     }
     const [li, lr] = lastRank(t.ranks);
